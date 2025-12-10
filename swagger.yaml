@@ -1,0 +1,591 @@
+openapi: 3.0.0
+info:
+  title: API Mi Caserito
+  description: API oficial sincronizada con la Base de Datos SQL.
+  version: 1.0.0
+servers:
+  # Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/own-1dd/MiCaseritoAPI/1.0.0
+  - url: https://api.micaserito.com/v1
+    description: Producción
+  - url: http://localhost:3000/api/v1
+    description: Local
+
+# -------------------------------------------------------------------------
+# SEGURIDAD GLOBAL: La mayoría de endpoints requieren Token
+# -------------------------------------------------------------------------
+security:
+  - bearerAuth: []
+
+paths:
+  # ==========================================
+  # 1. AUTENTICACIÓN (No requiere Token)
+  # ==========================================
+  /auth/login:
+    post:
+      tags:
+        - Autenticación
+      summary: Iniciar Sesión
+      security: [] # Público
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login exitoso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: object
+                    properties:
+                      id_usuario:
+                        type: integer
+                      tipo_usuario:
+                        type: string
+                        enum: [cliente, vendedor]
+                      token:
+                        type: string
+                        description: JWT para usar en los demás endpoints.
+
+  /auth/register:
+    post:
+      tags:
+        - Autenticación
+      summary: Registrar Usuario (Cliente o Vendedor)
+      security: [] # Público
+      description: Usa multipart para subir fotos.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [tipo_usuario, email, password, dni_image, nombre, apellido, direccion, latitud, longitud]
+              properties:
+                # Comunes
+                tipo_usuario:
+                  type: string
+                  enum: [cliente, vendedor]
+                email:
+                  type: string
+                password:
+                  type: string
+                nombre:
+                  type: string
+                apellido:
+                  type: string
+                dni_image:
+                  type: string
+                  format: binary
+                profile_image:
+                  type: string
+                  format: binary
+                direccion:
+                  type: string
+                latitud:
+                  type: number
+                  format: float
+                longitud:
+                  type: number
+                  format: float
+                # Específico Vendedor
+                nombre_negocio:
+                  type: string
+                id_categoria_negocio:
+                  type: integer
+                # Específico Cliente
+                genero:
+                  type: string
+                fecha_nacimiento:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Creado.
+
+  # ==========================================
+  # 2. HOME & DISCOVER
+  # ==========================================
+  /home/feed:
+    get:
+      tags:
+        - Home
+      summary: Feed Principal
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          description: Feed mixto (Productos y Posts).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeFeedResponse'
+
+  /discover/search:
+    get:
+      tags:
+        - Discover
+      summary: Buscador con Filtros
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Texto a buscar.
+        - name: filter
+          in: query
+          schema:
+            type: string
+            enum: [all, business, product]
+            default: all
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          description: Resultados de búsqueda.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeFeedResponse' # Reutilizamos estructura
+
+  /categories/business:
+    get:
+      tags:
+        - Discover
+      summary: Categorías de Negocio (Círculos)
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoriaNegocio'
+
+  # ==========================================
+  # 3. GESTIÓN (Vendedor)
+  # ==========================================
+  /products:
+    post:
+      tags:
+        - Gestión Vendedor
+      summary: Publicar Producto
+      description: El ID del vendedor se saca del Token.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, nombre, id_categoria_producto, precio_base, stock]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                nombre:
+                  type: string
+                descripcion:
+                  type: string
+                id_categoria_producto:
+                  type: integer
+                precio_base:
+                  type: number
+                  format: float
+                stock:
+                  type: integer
+                # Lógica Oferta
+                negociable:
+                  type: boolean
+                precio_promocional:
+                  type: number
+                fecha_inicio:
+                  type: string
+                  format: date-time
+                fecha_fin:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Publicado.
+
+  /posts:
+    post:
+      tags:
+        - Gestión Vendedor
+      summary: Publicar Post (Novedad)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, descripcion]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                descripcion:
+                  type: string
+      responses:
+        '201':
+          description: Publicado.
+
+  # ==========================================
+  # 4. PERFIL DE NEGOCIO (Vista pública)
+  # ==========================================
+  /negocio/{id}/info:
+    get:
+      tags:
+        - Perfil Negocio
+      summary: Header del perfil de un negocio
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessProfile'
+
+  /negocio/{id}/products:
+    get:
+      tags:
+        - Perfil Negocio
+      summary: Catálogo de un negocio
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductDetails'
+
+  /negocio/{id}/posts:
+    get:
+      tags:
+        - Perfil Negocio
+      summary: Posts de un negocio
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostDetails'
+
+  # ==========================================
+  # 5. CHAT
+  # ==========================================
+  /chats:
+    get:
+      tags:
+        - Chat
+      summary: Mis Conversaciones
+      description: ID de usuario extraído del Token.
+      parameters:
+        - name: filter
+          in: query
+          schema:
+            type: string
+            enum: [all, unread]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSummary'
+
+  /chats/{id_chat}/messages:
+    get:
+      tags:
+        - Chat
+      summary: Historial de Mensajes
+      parameters:
+        - name: id_chat
+          in: path
+          required: true
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessage'
+    post:
+      tags:
+        - Chat
+      summary: Enviar Mensaje
+      parameters:
+        - name: id_chat
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contenido:
+                  type: string
+      responses:
+        '201':
+          description: Enviado.
+
+  # ==========================================
+  # 6. USUARIO (Tickets y Seguridad)
+  # ==========================================
+  /tickets:
+    get:
+      tags:
+        - Tickets
+      summary: Mis Compras (Tickets)
+      description: Obtiene tickets del usuario autenticado (Token).
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TicketSummary'
+
+  /security/reports/sent:
+    get:
+      tags:
+        - Tickets
+      summary: Reportes que yo hice
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportSummary'
+
+  /security/reports/received:
+    get:
+      tags:
+        - Tickets
+      summary: Reportes en mi contra
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportSummary'
+
+# -------------------------------------------------------------------------
+# COMPONENTES Y SCHEMAS (Modelos de datos)
+# -------------------------------------------------------------------------
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      in: query
+      name: page
+      schema:
+        type: integer
+        default: 1
+      description: Paginación.
+
+  schemas:
+    # --- Estructura Feed ---
+    HomeFeedResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoverItem'
+        pagination:
+          type: object
+          properties:
+            has_more:
+              type: boolean
+
+    # --- Polimorfismo para Feed/Discover ---
+    DiscoverItem:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [product, business, post]
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/ProductDetails'
+            - $ref: '#/components/schemas/BusinessProfile' # Reusamos para card de negocio
+            - $ref: '#/components/schemas/PostDetails'
+
+    # --- Objetos Base (Mapeados a DB) ---
+    ProductDetails:
+      type: object
+      properties:
+        id_producto:
+          type: integer
+        nombre:
+          type: string
+        precio_base:
+          type: number
+        image_url:
+          type: string
+        nombre_negocio:
+          type: string # Join
+
+    PostDetails:
+      type: object
+      properties:
+        id_post:
+          type: integer
+        descripcion:
+          type: string
+        imagen_url:
+          type: string
+        fecha_creacion:
+          type: string
+          format: date-time
+        nombre_negocio:
+          type: string
+        profile_url:
+          type: string
+
+    BusinessProfile:
+      type: object
+      properties:
+        id_negocio:
+          type: integer
+        nombre_negocio:
+          type: string
+        descripcion:
+          type: string
+        calificacion_promedio:
+          type: number
+        direccion:
+          type: string
+        profile_url:
+          type: string # Del usuario dueño
+
+    CategoriaNegocio:
+      type: object
+      properties:
+        id_categoria_negocio:
+          type: integer
+        nombre:
+          type: string
+
+    # --- Chat ---
+    ChatSummary:
+      type: object
+      properties:
+        id_chat:
+          type: integer
+        nombre:
+          type: string
+        profile_url:
+          type: string
+        ultimo_mensaje:
+          type: string
+        mensajes_no_leidos:
+          type: integer
+
+    ChatMessage:
+      type: object
+      properties:
+        id_mensaje:
+          type: integer
+        id_usuario:
+          type: integer
+        contenido:
+          type: string
+        fecha_envio:
+          type: string
+          format: date-time
+
+    # --- Usuario/Tickets ---
+    TicketSummary:
+      type: object
+      properties:
+        id_ticket:
+          type: integer
+        codigo_ticket:
+          type: string
+        titulo:
+          type: string # Nombre negocio
+        total:
+          type: number
+        estado:
+          type: string
+
+    ReportSummary:
+      type: object
+      properties:
+        id_reporte:
+          type: integer
+        titulo:
+          type: string # Motivo
+        tipo_reporte:
+          type: string
+        usuario_relacionado:
+          type: string # Quien reportó o fue reportado
+        estado:
+          type: string

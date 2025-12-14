@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import supabase from './config/supabase';
-import path from 'path'; 
+import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
 import authRoutes from './routes/auth.routes';
@@ -23,7 +23,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 //Rutas de autenticación
-app.use('/api/v1/auth', authRoutes); 
+app.use('/api/v1/auth', authRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

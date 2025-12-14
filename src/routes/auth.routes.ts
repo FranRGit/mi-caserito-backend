@@ -9,8 +9,8 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 const registerUploads = upload.fields([
-    { name: 'dni_url', maxCount: 1 },
-    { name: 'profile_url', maxCount: 1 }
+    { name: 'dni_image', maxCount: 1 },
+    { name: 'profile_image', maxCount: 1 }
 ]);
 
 router.post('/register', registerUploads, authController.register);

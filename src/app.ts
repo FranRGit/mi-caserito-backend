@@ -4,6 +4,7 @@ import supabase from './config/supabase';
 import path from 'path'; 
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
+import authRoutes from './routes/auth.routes';
 
 dotenv.config();
 
@@ -20,6 +21,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get('/', (req: Request, res: Response) => {
   res.send('Servidor TS funcionando 🚀. Ve a /api-docs para ver la documentación.');
 });
+
+//Rutas de autenticación
+app.use('/api/v1/auth', authRoutes); 
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

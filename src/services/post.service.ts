@@ -1,28 +1,37 @@
 // src/services/post.service.ts
 
-import supabaseClient from '../config/supabase'; 
+import { createClient } from '@supabase/supabase-js';
 import { CreatePostDTO } from '../dtos/post.dto';
-import { Tables, TablesInsert } from '../types/database.types'; 
+import { Tables, TablesInsert } from '../types/database.types';
 
 type PostResponse = Tables<'POSTS'>;
 
-export async function createPostService(postData: CreatePostDTO): Promise<PostResponse> {
-    
-    const postInsertData: TablesInsert<'POSTS'> = postData;
+export async function createPostService(
+  postData: CreatePostDTO,
+  accessToken: string
+): Promise<PostResponse> {
 
-    const { data: newPost, error } = await supabaseClient
-        .from('POSTS') 
-        .insert([postInsertData])
-        .select() 
-        .single();
-
-    if (error) {
-        if (error.code === '23503') { 
-            throw new Error(`Error de validación de datos: ${error.message} (ID de Usuario no válido).`);
-        }
-        
-        throw new Error(`Error al publicar el post: ${error.message}`);
+  const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_KEY!,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
     }
+  );
 
-    return newPost;
+  const { data, error } = await supabase
+    .from('POSTS')
+    .insert(postData)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Error al publicar el post: ${error.message}`);
+  }
+
+  return data;
 }

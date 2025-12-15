@@ -117,81 +117,52 @@ export async function getHomeFeedService(page: number): Promise<FeedResponse> {
     const halfLimit = Math.ceil(totalLimit / 2);
     const offset = (page - 1) * halfLimit;
 
-    let feedResults: SearchResultData[] = [];
     let hasMore = false;
-    
-    // --- 1. Obtener Productos Destacados/Recientes ---
-    const { data: products, error: prodError } = await supabaseClient
-        .from('PRODUCTO')
+
+    // 🔥 PRODUCTOS EN PROMOCIÓN (ordenados por fecha_inicio)
+    const { data: promociones, error: promoError } = await supabaseClient
+        .from('PROMOCION_PRODUCTO')
         .select(`
-            id_producto,
-            nombre,
-            precio_base,
-            image_url,
-            NEGOCIO (nombre_negocio)
+            id_promocion,
+            fecha_inicio,
+            fecha_fin,
+            PRODUCTO (
+                id_producto,
+                nombre,
+                precio_base,
+                precio_promocional,
+                image_url,
+                NEGOCIO (nombre_negocio)
+            )
         `)
-        .eq('destacado', true)
-        .eq('activo', true)
-        .order('fecha_creacion', { ascending: false }) 
+        .eq('activa', true)
+        .order('fecha_inicio', { ascending: false })
         .limit(halfLimit + 1)
         .range(offset, offset + halfLimit);
 
-    if (prodError) throw new Error(`Error al obtener productos del feed: ${prodError.message}`);
-
-    // --- 2. Obtener Posts Recientes (Implementación Real) ---
-    const { data: posts, error: postError } = await supabaseClient
-        .from('POSTS')
-        .select(`
-            id_post,
-            descripcion,
-            imagen_url,
-            fecha_creacion,
-            PERFILES (nombre)
-        `)
-        .eq('activo', true)
-        .order('fecha_creacion', { ascending: false }) 
-        .limit(halfLimit + 1)
-        .range(offset, offset + halfLimit);
-
-    if (postError) throw new Error(`Error al obtener posts del feed: ${postError.message}`);
-
-    // --- 3. Mapear y Mezclar Resultados ---
-    
-    // CORRECCIÓN: Usamos 'as any[]' para los resultados de JOINs antes de mapear
-    const productItems = (products as any[] | null)?.map(p => ({
-        type: 'product' as const,
-        data: {
-            ...p,
-            nombre_negocio: p.NEGOCIO?.nombre_negocio,
-            NEGOCIO: undefined 
-        }
-    })) || [];
-    
-    const postItems = (posts as any[] | null)?.map(p => ({
-        type: 'post' as const,
-        data: {
-            ...p,
-            nombre_usuario: p.PERFILES?.nombre,
-            PERFILES: undefined
-        }
-    })) || [];
-    
-    // Concatenar y determinar si hay más elementos
-    let mixedItems = [...productItems, ...postItems];
-    
-    if (products?.length! > halfLimit || posts?.length! > halfLimit) {
-        hasMore = true;
+    if (promoError) {
+        throw new Error(`Error al obtener promociones: ${promoError.message}`);
     }
 
-    // Recortar los arrays si se pidieron ítems extra y limitar al total
-    if (products?.length! > halfLimit) products!.pop();
-    if (posts?.length! > halfLimit) posts!.pop();
-    
-    feedResults = mixedItems.slice(0, totalLimit);
-    
-    return { data: feedResults, pagination: { has_more: hasMore } };
-}
+    if (promociones && promociones.length > halfLimit) {
+        hasMore = true;
+        promociones.pop();
+    }
 
+    const productItems = (promociones as any[] | null)?.map(p => ({
+        type: 'product' as const,
+        data: {
+            ...p.PRODUCTO,
+            nombre_negocio: p.PRODUCTO?.NEGOCIO?.nombre_negocio
+        }
+    })) || [];
+
+    // 👉 Aquí luego puedes mezclar POSTS si quieres
+    return {
+        data: productItems.slice(0, totalLimit),
+        pagination: { has_more: hasMore }
+    };
+}
 // === 3. SERVICIO DE CATEGORÍAS (getBusinessCategoriesService) ===
 // -----------------------------------------------------------------
 
